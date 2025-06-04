@@ -11,7 +11,20 @@ A feature-rich Discord music bot built with Discord.js v14 and @discordjs/voice.
 - 🔄 Loop functionality (single song or entire queue)
 - ⏭️ Skip voting system
 - 🎛️ Slash commands support
+- 🎮 Interactive button controls for music playback
 - 🚀 Easy to set up and deploy
+
+## Interactive Controls
+
+The bot now features interactive button controls that appear when music is playing:
+
+- **⏸️ Pause/▶️ Resume** - Toggle playback state
+- **⏭️ Skip** - Skip to the next song
+- **⏹️ Stop** - Stop music and clear queue
+- **🔄 Loop** - Cycle through loop modes (Off → Song → Queue → Off)
+- **📋 Queue** - View current queue and status
+
+These buttons provide a user-friendly alternative to slash commands and make controlling music playback more intuitive.
 
 ## Setup
 
@@ -47,6 +60,8 @@ A feature-rich Discord music bot built with Discord.js v14 and @discordjs/voice.
 
 ### Admin Commands
 - `/disconnect` - Disconnect the bot from voice channel
+
+**Note:** Most music controls are also available through interactive buttons that appear when music is playing, providing a more convenient way to control playback without typing commands.
 
 ## Requirements
 

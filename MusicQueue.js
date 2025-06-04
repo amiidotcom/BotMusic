@@ -7,7 +7,7 @@ const {
     joinVoiceChannel
 } = require('@discordjs/voice');
 const ytdl = require('@distube/ytdl-core');
-const { EmbedBuilder } = require('discord.js');
+const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 
 class MusicQueue {
     constructor(guildId, voiceChannel, textChannel) {
@@ -15,21 +15,25 @@ class MusicQueue {
         this.voiceChannel = voiceChannel;
         this.textChannel = textChannel;
         this.songs = [];
-        this.currentSong = null;
-        this.isPlaying = false;
+        this.currentSong = null;        this.isPlaying = false;
         this.volume = parseInt(process.env.DEFAULT_VOLUME) || 50;
         this.loop = 'off'; // 'off', 'song', 'queue'
+        this.lastMessage = null; // Store reference to the last "Now Playing" message
         
         this.player = createAudioPlayer();
         this.connection = null;
         
         this.setupEventListeners();
-    }
-
-    setupEventListeners() {
+    }    setupEventListeners() {
         // Player state change events
         this.player.on(AudioPlayerStatus.Playing, () => {
             this.isPlaying = true;
+            this.updateControlButtons(); // Update buttons when playing
+        });
+
+        this.player.on(AudioPlayerStatus.Paused, () => {
+            this.isPlaying = false;
+            this.updateControlButtons(); // Update buttons when paused
         });
 
         this.player.on(AudioPlayerStatus.Idle, () => {
@@ -101,15 +105,13 @@ class MusicQueue {
                         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
                     }
                 }
-            });
-
-            const resource = createAudioResource(stream, {
+            });            const resource = createAudioResource(stream, {
                 inlineVolume: true
             });
 
             resource.volume.setVolume(this.volume / 100);
             this.player.play(resource);
-
+            
             // Send now playing embed
             const embed = new EmbedBuilder()
                 .setColor(0x00ff00)
@@ -121,9 +123,31 @@ class MusicQueue {
                     { name: '🔊 Volume', value: `${this.volume}%`, inline: true }
                 )
                 .setThumbnail(song.thumbnail)
-                .setTimestamp();
+                .setTimestamp();            // Create control buttons
+            const row = new ActionRowBuilder()
+                .addComponents(
+                    new ButtonBuilder()
+                        .setCustomId('music_pause_resume')
+                        .setLabel('⏸️ Pause')
+                        .setStyle(ButtonStyle.Secondary),
+                    new ButtonBuilder()
+                        .setCustomId('music_skip')
+                        .setLabel('⏭️ Skip')
+                        .setStyle(ButtonStyle.Primary),
+                    new ButtonBuilder()
+                        .setCustomId('music_stop')
+                        .setLabel('⏹️ Stop')
+                        .setStyle(ButtonStyle.Danger),
+                    new ButtonBuilder()
+                        .setCustomId('music_loop')
+                        .setLabel(`🔄 ${this.loop === 'off' ? 'Loop Off' : this.loop === 'song' ? 'Loop Song' : 'Loop Queue'}`)
+                        .setStyle(ButtonStyle.Success),
+                    new ButtonBuilder()
+                        .setCustomId('music_queue')
+                        .setLabel('📋 Queue')
+                        .setStyle(ButtonStyle.Secondary)                );
 
-            this.textChannel.send({ embeds: [embed] });
+            this.lastMessage = await this.textChannel.send({ embeds: [embed], components: [row] });
 
         } catch (error) {
             console.error('Error playing song:', error);
@@ -150,9 +174,7 @@ class MusicQueue {
             return true;
         }
         return false;
-    }
-
-    pause() {
+    }    pause() {
         if (this.isPlaying) {
             this.player.pause();
             return true;
@@ -202,12 +224,63 @@ class MusicQueue {
 
     clear() {
         this.songs = [];
-    }
-
-    destroy() {
+    }    destroy() {
         this.stop();
         if (this.connection) {
             this.connection.destroy();
+        }
+    }
+
+    // Create control buttons based on current state
+    createControlButtons() {
+        return new ActionRowBuilder()
+            .addComponents(
+                new ButtonBuilder()
+                    .setCustomId('music_pause_resume')
+                    .setLabel(this.isPlaying ? '⏸️ Pause' : '▶️ Resume')
+                    .setStyle(ButtonStyle.Secondary)
+                    .setDisabled(!this.currentSong),
+                new ButtonBuilder()
+                    .setCustomId('music_skip')
+                    .setLabel('⏭️ Skip')
+                    .setStyle(ButtonStyle.Primary)
+                    .setDisabled(!this.currentSong),
+                new ButtonBuilder()
+                    .setCustomId('music_stop')
+                    .setLabel('⏹️ Stop')
+                    .setStyle(ButtonStyle.Danger)
+                    .setDisabled(!this.currentSong && this.songs.length === 0),
+                new ButtonBuilder()
+                    .setCustomId('music_loop')
+                    .setLabel(`🔄 ${this.loop === 'off' ? 'Loop Off' : this.loop === 'song' ? 'Loop Song' : 'Loop Queue'}`)
+                    .setStyle(ButtonStyle.Success),
+                new ButtonBuilder()
+                    .setCustomId('music_queue')
+                    .setLabel('📋 Queue')
+                    .setStyle(ButtonStyle.Secondary)
+            );
+    }
+
+    async updateControlButtons() {
+        if (!this.currentSong || !this.lastMessage) return;
+
+        try {
+            const embed = new EmbedBuilder()
+                .setColor(0x00ff00)
+                .setTitle('🎵 Now Playing')
+                .setDescription(`[${this.currentSong.title}](${this.currentSong.url})`)
+                .addFields(
+                    { name: '👤 Requested by', value: this.currentSong.requestedBy.toString(), inline: true },
+                    { name: '⏱️ Duration', value: this.currentSong.duration, inline: true },
+                    { name: '🔊 Volume', value: `${this.volume}%`, inline: true }
+                )
+                .setThumbnail(this.currentSong.thumbnail)
+                .setTimestamp();
+
+            const row = this.createControlButtons();
+            await this.lastMessage.edit({ embeds: [embed], components: [row] });
+        } catch (error) {
+            console.error('Error updating control buttons:', error);
         }
     }
 }
